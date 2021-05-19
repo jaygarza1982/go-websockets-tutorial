@@ -1,3 +1,5 @@
-module github.com/tutorialedge/go/go-websocket-tutorial
+module go-sockets
 
-require github.com/gorilla/websocket v1.4.0
+go 1.16
+
+require github.com/gorilla/websocket v1.4.2 // indirect

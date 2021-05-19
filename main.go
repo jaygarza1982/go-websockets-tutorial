@@ -16,6 +16,8 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
+var sockets = []*websocket.Conn{}
+
 // define a reader which will listen for
 // new messages being sent to our WebSocket
 // endpoint
@@ -29,6 +31,12 @@ func reader(conn *websocket.Conn) {
 		}
 		// print out that message for clarity
 		log.Println(string(p))
+
+		// Write message to all other sockets
+		for i := 0; i < len(sockets); i++ {
+			log.Println("Writing", string(p), "to all clients.")
+			sockets[i].WriteMessage(1, p)
+		}
 
 		if err := conn.WriteMessage(messageType, p); err != nil {
 			log.Println(err)
@@ -46,6 +54,12 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
 	// upgrade this connection to a WebSocket
 	// connection
 	ws, err := upgrader.Upgrade(w, r, nil)
+
+	// ws.
+
+	// Add our current websocket to the sockets array
+	sockets = append(sockets, ws)
+
 	if err != nil {
 		log.Println(err)
 	}
