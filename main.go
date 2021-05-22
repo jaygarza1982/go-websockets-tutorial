@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -16,12 +18,21 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-var sockets = []*websocket.Conn{}
+//We will use this as a set
+var socketsSet = map[*websocket.Conn]bool{}
 
 // define a reader which will listen for
 // new messages being sent to our WebSocket
 // endpoint
 func reader(conn *websocket.Conn) {
+	conn.SetCloseHandler(func(code int, text string) error {
+		textString := fmt.Sprintf("Closing client code %d because %s", code, text)
+
+		delete(socketsSet, conn)
+
+		return errors.New(textString)
+	})
+
 	for {
 		// read in a message
 		messageType, p, err := conn.ReadMessage()
@@ -32,17 +43,19 @@ func reader(conn *websocket.Conn) {
 		// print out that message for clarity
 		log.Println(string(p))
 
-		// Write message to all other sockets
-		for i := 0; i < len(sockets); i++ {
-			log.Println("Writing", string(p), "to all clients.")
-			sockets[i].WriteMessage(1, p)
+		//Write to other sockets
+		for socket := range socketsSet {
+			//Don't write to self
+			if socket != conn {
+				socket.WriteMessage(1, p)
+				fmt.Printf("Writing to %d sockets\n", len(socketsSet))
+			}
 		}
 
 		if err := conn.WriteMessage(messageType, p); err != nil {
 			log.Println(err)
 			return
 		}
-
 	}
 }
 
@@ -58,19 +71,17 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
 	// ws.
 
 	// Add our current websocket to the sockets array
-	sockets = append(sockets, ws)
+	clientId := fmt.Sprintf("%d", rand.Int())
+	socketsSet[ws] = true
+	// sockets = append(sockets, ws)
 
 	if err != nil {
 		log.Println(err)
 	}
 
-	log.Println("Client Connected")
-	err = ws.WriteMessage(1, []byte("Hi Client!"))
-	if err != nil {
-		log.Println(err)
-	}
-	// listen indefinitely for new messages coming
-	// through on our WebSocket connection
+	fmt.Printf("Client %s connected\n", clientId)
+
+	//Listen on this socket forever until it closes
 	reader(ws)
 }
 
